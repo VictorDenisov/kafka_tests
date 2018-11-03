@@ -10,11 +10,9 @@ import (
 	"time"
 )
 
-func main() {
+func UnpartitionedReader(topic string) {
 
 	brokers := []string{"localhost:9092"}
-
-	topic := "road-snapper"
 
 	var partitions []k.Partition = nil
 	for _, b := range brokers {
@@ -45,8 +43,6 @@ func main() {
 		if err != nil {
 			log.Fatal("Failed to read messages: %v", err)
 		}
-
-		var mms map[string]string
 
 		for _, m := range msgs {
 			log.Printf("Key: %v - %v", string(m.Key), string(m.Value))
