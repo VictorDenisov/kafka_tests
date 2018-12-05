@@ -5,14 +5,13 @@ import (
 	k "github.com/segmentio/kafka-go"
 	"io"
 	"log"
-	"net"
-	"strconv"
+	"reflect"
 	"time"
 )
 
 func UnpartitionedReader(topic string) {
 
-	brokers := []string{"localhost:9092"}
+	brokers := []string{"kafka:9092"}
 
 	var partitions []k.Partition = nil
 	for _, b := range brokers {
@@ -32,21 +31,25 @@ func UnpartitionedReader(topic string) {
 	}
 	log.Printf("Received partitions are: %v", partitions)
 	for _, p := range partitions {
-		conn, err := DialPartition(context.Background(), "tcp", k.DefaultDialer, p)
+		//conn, err := DialPartition(context.Background(), "tcp", k.DefaultDialer, p)
+		log.Printf("Dialing partition %v", p)
+		conn, err := k.DialPartition(context.Background(), "tcp", "kafka:9092", p)
 		if err != nil {
 			log.Printf("Failed to dial leader: %v", err)
 		}
 		const safetyTimeout = 10 * time.Second
 		deadline := time.Now().Add(safetyTimeout)
 		conn.SetReadDeadline(deadline)
-		msgs, err := ReadMessages(conn)
+		_, err = ReadMessages(conn)
 		if err != nil {
-			log.Fatal("Failed to read messages: %v", err)
+			log.Printf("Failed to read messages: %v", err)
 		}
 
-		for _, m := range msgs {
-			log.Printf("Key: %v - %v", string(m.Key), string(m.Value))
-		}
+		/*
+			for _, m := range msgs {
+				log.Printf("Key: %v - %v", string(m.Key), string(m.Value))
+			}
+		*/
 	}
 }
 
@@ -56,67 +59,41 @@ func ReadMessages(conn *k.Conn) ([]k.Message, error) {
 		batch := conn.ReadBatch(0, 100)
 
 		msgCount := 0
+	loop:
 		for {
 			msg, err := batch.ReadMessage()
-			if err == io.EOF {
-				err := batch.Close()
-				if err != nil {
-					return nil, err
-				}
-				if msgCount == 0 {
-					return msgs, nil
-				} else {
-					break
-				}
-			}
 			if err != nil {
-				return nil, err
+				switch err := err.(type) {
+				case k.Error:
+					log.Printf("This is kafka error")
+					if err.Timeout() {
+						return msgs, err
+					} else {
+						return msgs, err
+					}
+				default:
+					if err == io.EOF {
+						err := batch.Close()
+						if err != nil {
+							log.Printf("Failed to close batch")
+							return msgs, err
+						}
+						if msgCount == 0 {
+							return msgs, nil
+						} else {
+							//log.Printf("msgCount is not 0. Exiting loop.")
+							break loop
+						}
+					}
+
+					log.Printf("Unknown error: %v", reflect.TypeOf(err))
+					return msgs, err
+				}
 			}
+			//log.Printf("Read message: %v", msg)
 			msgs = append(msgs, msg)
 			msgCount++
 		}
 	}
 
-}
-
-func DialPartition(ctx context.Context, network string, d *k.Dialer, p k.Partition) (*k.Conn, error) {
-	address := net.JoinHostPort(p.Leader.Host, strconv.Itoa(p.Leader.Port))
-	if r := d.Resolver; r != nil {
-		addrs, err := r.LookupHost(ctx, p.Leader.Host)
-		if err != nil {
-			return nil, err
-		}
-		log.Printf("Looked up addrs: %v", addrs)
-		if len(addrs) != 0 {
-			address = addrs[0]
-		} else {
-			log.Fatalf("Empty list of addresses")
-		}
-		address, _ = splitHostPort(address)
-		address = net.JoinHostPort(address, strconv.Itoa(p.Leader.Port))
-	}
-
-	conn, err := (&net.Dialer{
-		LocalAddr:     d.LocalAddr,
-		DualStack:     d.DualStack,
-		FallbackDelay: d.FallbackDelay,
-		KeepAlive:     d.KeepAlive,
-	}).DialContext(ctx, network, address)
-	if err != nil {
-		return nil, err
-	}
-
-	return k.NewConnWith(conn, k.ConnConfig{
-		ClientID:  d.ClientID,
-		Topic:     p.Topic,
-		Partition: p.ID,
-	}), nil
-}
-
-func splitHostPort(s string) (host string, port string) {
-	host, port, _ = net.SplitHostPort(s)
-	if len(host) == 0 && len(port) == 0 {
-		host = s
-	}
-	return
 }
