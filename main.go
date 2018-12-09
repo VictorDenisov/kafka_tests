@@ -45,10 +45,10 @@ func main() {
 }
 
 func V2Test(topic string) {
-	msgs := make([]k.Message, 100)
+	msgs := make([]k.Message, 1)
 	for i := range msgs {
 		value := fmt.Sprintf("Hello World %d!", i)
-		msgs[i] = k.Message{Value: []byte(value)}
+		msgs[i] = k.Message{Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk", Value: []byte("hv")}}}
 	}
 
 	w := k.NewWriter(k.WriterConfig{
