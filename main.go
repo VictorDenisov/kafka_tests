@@ -48,7 +48,7 @@ func V2Test(topic string) {
 	msgs := make([]k.Message, 1)
 	for i := range msgs {
 		value := fmt.Sprintf("Hello World %d!", i)
-		msgs[i] = k.Message{Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk", Value: []byte("hv")}}}
+		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk", Value: []byte("hv")}}}
 	}
 
 	w := k.NewWriter(k.WriterConfig{
@@ -62,27 +62,30 @@ func V2Test(topic string) {
 	defer cancel()
 	if err := w.WriteMessages(ctx, msgs...); err != nil {
 		log.Fatalf("failed to produce messages: %+v", err)
+		return
 	}
 
 	log.Printf("Success")
 
-	r := k.NewReader(k.ReaderConfig{
-		Brokers:   []string{"kafka:9092"},
-		Topic:     topic,
-		Partition: 0,
-		MaxWait:   10 * time.Millisecond,
-		MinBytes:  1,
-		MaxBytes:  1000,
-	})
-	defer r.Close()
+	/*
+		r := k.NewReader(k.ReaderConfig{
+			Brokers:   []string{"kafka:9092"},
+			Topic:     topic,
+			Partition: 0,
+			MaxWait:   10 * time.Millisecond,
+			MinBytes:  1,
+			MaxBytes:  1000,
+		})
+		defer r.Close()
 
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	m, err := r.ReadMessage(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("Message: %v", string(m.Value))
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		m, err := r.ReadMessage(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Message: %v", string(m.Value))
+	*/
 }
 
 func b2i(x bool) int {
