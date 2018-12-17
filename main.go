@@ -18,37 +18,57 @@ func main() {
 	reader := flag.Bool("reader", false, "Reader option")
 	unpart := flag.Bool("unpart", false, "Unpartitioned reader")
 	v2test := flag.Bool("v2test", false, "v2 test")
+	versions := flag.Bool("versions", false, "versions")
+	topic := flag.String("topic", "test_topic", "Topic")
 	flag.Parse()
 
-	count := b2i(*writer) + b2i(*reader) + b2i(*unpart) + b2i(*v2test)
+	count := b2i(*writer) + b2i(*reader) + b2i(*unpart) + b2i(*v2test) + b2i(*versions)
 	if count != 1 {
 		fmt.Printf("We need exactly one command option\n")
 		os.Exit(1)
 	}
 
-	topic := "test_topic"
-
 	switch {
 	case *writer:
 		fmt.Printf("This is writer. Partition %v\n", *partition)
-		Writer(topic, *partition)
+		Writer(*topic, *partition)
 	case *reader:
 		fmt.Printf("This is reader. Partition %v\n", *partition)
-		Reader(topic, *partition)
+		Reader(*topic, *partition)
 	case *unpart:
 		fmt.Printf("This is unpart\n")
-		UnpartitionedReader(topic)
+		UnpartitionedReader(*topic)
 	case *v2test:
 		fmt.Println("V2 test\n")
-		V2Test(topic)
+		V2Test(*topic)
+	case *versions:
+		fmt.Println("Versions\n")
+		Versions()
+	}
+}
+
+func Versions() {
+	conn, err := k.Dial("tcp", "kafka:9092")
+	if err != nil {
+		log.Printf("Failed to connect to kafka cluster: %v", err)
+		os.Exit(1)
+	}
+	versions, err := conn.ApiVersions()
+	if err != nil {
+		log.Printf("Error: %v", err)
+	}
+
+	for _, v := range versions {
+		log.Printf("Api Key: %v, min: %v, max: %v", v.ApiKey, v.MinVersion, v.MaxVersion)
 	}
 }
 
 func V2Test(topic string) {
-	msgs := make([]k.Message, 1)
+	msgs := make([]k.Message, 3)
 	for i := range msgs {
 		value := fmt.Sprintf("Hello World %d!", i)
-		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk", Value: []byte("hv")}}}
+		//msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk", Value: []byte("hv")}}}
+		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value)}
 	}
 
 	w := k.NewWriter(k.WriterConfig{
@@ -67,25 +87,25 @@ func V2Test(topic string) {
 
 	log.Printf("Success")
 
-	/*
-		r := k.NewReader(k.ReaderConfig{
-			Brokers:   []string{"kafka:9092"},
-			Topic:     topic,
-			Partition: 0,
-			MaxWait:   10 * time.Millisecond,
-			MinBytes:  1,
-			MaxBytes:  1000,
-		})
-		defer r.Close()
+	r := k.NewReader(k.ReaderConfig{
+		Brokers:   []string{"kafka:9092"},
+		Topic:     topic,
+		Partition: 0,
+		MaxWait:   10 * time.Millisecond,
+		MinBytes:  1,
+		MaxBytes:  1000,
+	})
+	defer r.Close()
 
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for {
 		m, err := r.ReadMessage(ctx)
 		if err != nil {
 			log.Fatal(err)
 		}
 		log.Printf("Message: %v", string(m.Value))
-	*/
+	}
 }
 
 func b2i(x bool) int {
