@@ -43,12 +43,12 @@ func main() {
 		V2Test(*topic)
 	case *versions:
 		fmt.Println("Versions\n")
-		Versions()
+		Versions(*topic)
 	}
 }
 
-func Versions() {
-	conn, err := k.Dial("tcp", "kafka:9092")
+func Versions(topic string) {
+	conn, err := k.DialLeader(context.Background(), "tcp", "kafka:9092", topic, 0)
 	if err != nil {
 		log.Printf("Failed to connect to kafka cluster: %v", err)
 		os.Exit(1)
@@ -61,6 +61,13 @@ func Versions() {
 	for _, v := range versions {
 		log.Printf("Api Key: %v, min: %v, max: %v", v.ApiKey, v.MinVersion, v.MaxVersion)
 	}
+	b := conn.ReadBatch(1, 1000)
+	m, err := b.ReadMessage()
+	if err != nil {
+		log.Printf("Err: %v", err)
+		return
+	}
+	log.Printf("Message: %v", m)
 }
 
 func V2Test(topic string) {
