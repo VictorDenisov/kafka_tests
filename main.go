@@ -71,26 +71,24 @@ func Versions(topic string) {
 }
 
 func V2Test(topic string) {
-	msgs := make([]k.Message, 3)
+	msgs := make([]k.Message, 20)
 	for i := range msgs {
 		value := fmt.Sprintf("Hello World %d!", i)
-		//msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk", Value: []byte("hv")}}}
-		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value)}
+		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk_x", Value: []byte("hv__x")}}}
+		//msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value)}
 	}
 
 	w := k.NewWriter(k.WriterConfig{
 		Brokers:   []string{"kafka:9092"},
 		Topic:     topic,
-		BatchSize: 1,
+		BatchSize: 11,
 	})
-	defer w.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := w.WriteMessages(ctx, msgs...); err != nil {
+	if err := w.WriteMessages(context.Background(), msgs...); err != nil {
 		log.Fatalf("failed to produce messages: %+v", err)
 		return
 	}
+	w.Close()
 
 	log.Printf("Success")
 
@@ -104,14 +102,13 @@ func V2Test(topic string) {
 	})
 	defer r.Close()
 
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 	for {
-		m, err := r.ReadMessage(ctx)
+		m, err := r.ReadMessage(context.Background())
 		if err != nil {
 			log.Fatal(err)
 		}
 		log.Printf("Message: %v", string(m.Value))
+		log.Printf("================")
 	}
 }
 
@@ -124,36 +121,57 @@ func b2i(x bool) int {
 }
 
 func Reader(topic string, partition int) {
-	conn, err := k.DialLeader(context.Background(), "tcp", "kafka:9092", topic, partition)
-	if err != nil {
-		log.Printf("Failed to connect to kafka cluster: %v", err)
-		os.Exit(1)
-	}
+	r := k.NewReader(k.ReaderConfig{
+		Brokers:   []string{"kafka:9092"},
+		Topic:     topic,
+		Partition: 0,
+		MaxWait:   10 * time.Millisecond,
+		MinBytes:  1,
+		MaxBytes:  1000,
+	})
+	defer r.Close()
 
-	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-	batch := conn.ReadBatch(10e3, 1e6) // fetch 10KB min, 1MB max
-
-	/*
-		b := make([]byte, 10e3) // 10KB max per message
-		for {
-			_, err := batch.Read(b)
-			if err != nil {
-				break
-			}
-			fmt.Println(string(b))
-		}
-	*/
 	for {
-		m, err := batch.ReadMessage()
+		m, err := r.ReadMessage(context.Background())
 		if err != nil {
-			log.Printf("Exited with message: %v", err)
-			break
+			log.Fatal(err)
 		}
-		fmt.Println(m)
+		log.Printf("Message: %v", string(m.Value))
+		log.Printf("================")
 	}
+	/*
+		conn, err := k.DialLeader(context.Background(), "tcp", "kafka:9092", topic, partition)
+		if err != nil {
+			log.Printf("Failed to connect to kafka cluster: %v", err)
+			os.Exit(1)
+		}
 
-	batch.Close()
-	conn.Close()
+		/*
+			b := make([]byte, 10e3) // 10KB max per message
+			for {
+				_, err := batch.Read(b)
+				if err != nil {
+					break
+				}
+				fmt.Println(string(b))
+			}
+		for {
+			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			batch := conn.ReadBatch(10e3, 1e6) // fetch 10KB min, 1MB max
+			for {
+				m, err := batch.ReadMessage()
+				if err != nil {
+					log.Printf("Exited with message: %v", err)
+					break
+				}
+				fmt.Printf("Message: %v\n", string(m.Value))
+				fmt.Printf("---- Headers: %v\n", m.Headers)
+			}
+			batch.Close()
+		}
+
+		conn.Close()
+	*/
 }
 
 func Writer(topic string, partition int) {
