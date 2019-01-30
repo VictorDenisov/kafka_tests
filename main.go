@@ -71,7 +71,7 @@ func Versions(topic string) {
 }
 
 func V2Test(topic string) {
-	msgs := make([]k.Message, 20)
+	msgs := make([]k.Message, 5)
 	for i := range msgs {
 		value := fmt.Sprintf("Hello World %d!", i)
 		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk_x", Value: []byte("hv__x")}}}
@@ -81,7 +81,7 @@ func V2Test(topic string) {
 	w := k.NewWriter(k.WriterConfig{
 		Brokers:   []string{"kafka:9092"},
 		Topic:     topic,
-		BatchSize: 11,
+		BatchSize: 3,
 	})
 
 	if err := w.WriteMessages(context.Background(), msgs...); err != nil {
@@ -92,24 +92,26 @@ func V2Test(topic string) {
 
 	log.Printf("Success")
 
-	r := k.NewReader(k.ReaderConfig{
-		Brokers:   []string{"kafka:9092"},
-		Topic:     topic,
-		Partition: 0,
-		MaxWait:   10 * time.Millisecond,
-		MinBytes:  1,
-		MaxBytes:  1000,
-	})
-	defer r.Close()
+	/*
+		r := k.NewReader(k.ReaderConfig{
+			Brokers:   []string{"kafka:9092"},
+			Topic:     topic,
+			Partition: 0,
+			MaxWait:   10 * time.Millisecond,
+			MinBytes:  1,
+			MaxBytes:  1000,
+		})
+		defer r.Close()
 
-	for {
-		m, err := r.ReadMessage(context.Background())
-		if err != nil {
-			log.Fatal(err)
+		for {
+			m, err := r.ReadMessage(context.Background())
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("Message: %v", string(m.Value))
+			log.Printf("================")
 		}
-		log.Printf("Message: %v", string(m.Value))
-		log.Printf("================")
-	}
+	*/
 }
 
 func b2i(x bool) int {
@@ -137,6 +139,9 @@ func Reader(topic string, partition int) {
 			log.Fatal(err)
 		}
 		log.Printf("Message: %v", string(m.Value))
+		for h := range {
+		}
+		log.Printf("Headers: %v", m.Headers)
 		log.Printf("================")
 	}
 	/*
