@@ -74,7 +74,8 @@ func V2Test(topic string) {
 	msgs := make([]k.Message, 5)
 	for i := range msgs {
 		value := fmt.Sprintf("Hello World %d!", i)
-		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: "hk_x", Value: []byte("hv__x")}}}
+		key := fmt.Sprintf("hk_x: %v", i)
+		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: key, Value: []byte("hv__x")}}}
 		//msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value)}
 	}
 
@@ -134,14 +135,15 @@ func Reader(topic string, partition int) {
 	defer r.Close()
 
 	for {
+		//log.Printf("Starting message reading loop")
 		m, err := r.ReadMessage(context.Background())
 		if err != nil {
 			log.Fatal(err)
 		}
 		log.Printf("Message: %v", string(m.Value))
-		for h := range {
+		for _, h := range m.Headers {
+			log.Printf("%v - %v", h.Key, string(h.Value))
 		}
-		log.Printf("Headers: %v", m.Headers)
 		log.Printf("================")
 	}
 	/*
