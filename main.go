@@ -74,9 +74,9 @@ func V2Test(topic string) {
 	msgs := make([]k.Message, 5)
 	for i := range msgs {
 		value := fmt.Sprintf("Hello World %d!", i)
-		key := fmt.Sprintf("hk_x: %v", i)
-		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: key, Value: []byte("hv__x")}}}
-		//msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value)}
+		//key := fmt.Sprintf("hk_x: %v", i)
+		//msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: key, Value: []byte("hv__x")}}}
+		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value)}
 	}
 
 	w := k.NewWriter(k.WriterConfig{
@@ -128,17 +128,23 @@ func Reader(topic string, partition int) {
 		Brokers:   []string{"kafka:9092"},
 		Topic:     topic,
 		Partition: 0,
-		MaxWait:   10 * time.Millisecond,
-		MinBytes:  1,
-		MaxBytes:  1000,
+		//MaxWait:  10 * time.Millisecond,
+		//MinBytes: 1,
+		//MaxBytes: 1000,
 	})
 	defer r.Close()
 
+	r.SetOffset(4)
+	first := true
 	for {
 		//log.Printf("Starting message reading loop")
 		m, err := r.ReadMessage(context.Background())
 		if err != nil {
 			log.Fatal(err)
+		}
+		if first {
+			r.SetOffset(2)
+			first = false
 		}
 		log.Printf("Message: %v", string(m.Value))
 		for _, h := range m.Headers {
@@ -153,17 +159,9 @@ func Reader(topic string, partition int) {
 			os.Exit(1)
 		}
 
-		/*
-			b := make([]byte, 10e3) // 10KB max per message
-			for {
-				_, err := batch.Read(b)
-				if err != nil {
-					break
-				}
-				fmt.Println(string(b))
-			}
 		for {
 			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+			conn.Seek(3, k.SeekAbsolute)
 			batch := conn.ReadBatch(10e3, 1e6) // fetch 10KB min, 1MB max
 			for {
 				m, err := batch.ReadMessage()
