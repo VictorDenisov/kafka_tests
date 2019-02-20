@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	k "github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/gzip"
+	"github.com/segmentio/kafka-go/lz4"
+	"github.com/segmentio/kafka-go/snappy"
 	"log"
 	"os"
 	"time"
@@ -16,13 +19,14 @@ func main() {
 	writer := flag.Bool("writer", false, "Writer option")
 	partition := flag.Int("partition", 0, "Partition number for reader and writer")
 	reader := flag.Bool("reader", false, "Reader option")
+	connReader := flag.Bool("connReader", false, "Conn Reader option")
 	unpart := flag.Bool("unpart", false, "Unpartitioned reader")
 	v2test := flag.Bool("v2test", false, "v2 test")
 	versions := flag.Bool("versions", false, "versions")
 	topic := flag.String("topic", "test_topic", "Topic")
 	flag.Parse()
 
-	count := b2i(*writer) + b2i(*reader) + b2i(*unpart) + b2i(*v2test) + b2i(*versions)
+	count := b2i(*writer) + b2i(*reader) + b2i(*unpart) + b2i(*v2test) + b2i(*versions) + b2i(*connReader)
 	if count != 1 {
 		fmt.Printf("We need exactly one command option\n")
 		os.Exit(1)
@@ -35,6 +39,9 @@ func main() {
 	case *reader:
 		fmt.Printf("This is reader. Partition %v\n", *partition)
 		Reader(*topic, *partition)
+	case *connReader:
+		fmt.Printf("This is connReader. Partition %v\n", *partition)
+		ConnReader(*topic, *partition)
 	case *unpart:
 		fmt.Printf("This is unpart\n")
 		UnpartitionedReader(*topic)
@@ -71,47 +78,62 @@ func Versions(topic string) {
 }
 
 func V2Test(topic string) {
-	msgs := make([]k.Message, 5)
-	for i := range msgs {
-		value := fmt.Sprintf("Hello World %d!", i)
-		//key := fmt.Sprintf("hk_x: %v", i)
-		//msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value), Headers: []k.Header{k.Header{Key: key, Value: []byte("hv__x")}}}
-		msgs[i] = k.Message{Key: []byte("Key"), Value: []byte(value)}
+	offset := 0
+
+	produce := func(n int, codec k.CompressionCodec) {
+		w := k.NewWriter(k.WriterConfig{
+			Brokers:          []string{"kafka:9092"},
+			Topic:            topic,
+			CompressionCodec: codec,
+		})
+		defer w.Close()
+
+		msgs := make([]k.Message, n)
+		for i := range msgs {
+			value := fmt.Sprintf("Bye World %d!", offset)
+			offset++
+			msgs[i] = k.Message{Value: []byte(value)}
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := w.WriteMessages(ctx, msgs...); err != nil {
+			log.Printf("failed to produce messages: %+v", err)
+		}
 	}
 
-	w := k.NewWriter(k.WriterConfig{
-		Brokers:   []string{"kafka:9092"},
-		Topic:     topic,
-		BatchSize: 3,
-	})
-
-	if err := w.WriteMessages(context.Background(), msgs...); err != nil {
-		log.Fatalf("failed to produce messages: %+v", err)
-		return
-	}
-	w.Close()
+	produce(3, nil)
+	produce(4, gzip.NewCompressionCodec())
+	produce(2, nil)
+	produce(4, lz4.NewCompressionCodec())
+	produce(10, snappy.NewCompressionCodec())
 
 	log.Printf("Success")
 
 	/*
-		r := k.NewReader(k.ReaderConfig{
-			Brokers:   []string{"kafka:9092"},
-			Topic:     topic,
-			Partition: 0,
-			MaxWait:   10 * time.Millisecond,
-			MinBytes:  1,
-			MaxBytes:  1000,
-		})
-		defer r.Close()
+			r := k.NewReader(k.ReaderConfig{
 
-		for {
-			m, err := r.ReadMessage(context.Background())
-			if err != nil {
-				log.Fatal(err)
+		log.Printf("Success")
+
+		/*
+			r := k.NewReader(k.ReaderConfig{
+				Brokers:   []string{"kafka:9092"},
+				Topic:     topic,
+				Partition: 0,
+				MaxWait:   10 * time.Millisecond,
+				MinBytes:  1,
+				MaxBytes:  1000,
+			})
+			defer r.Close()
+
+			for {
+				m, err := r.ReadMessage(context.Background())
+				if err != nil {
+					log.Fatal(err)
+				}
+				log.Printf("Message: %v", string(m.Value))
+				log.Printf("================")
 			}
-			log.Printf("Message: %v", string(m.Value))
-			log.Printf("================")
-		}
 	*/
 }
 
@@ -129,24 +151,28 @@ func Reader(topic string, partition int) {
 		Topic:     topic,
 		Partition: 0,
 		//MaxWait:  10 * time.Millisecond,
-		//MinBytes: 1,
-		//MaxBytes: 1000,
+		MinBytes: 1,
+		MaxBytes: 1000,
 	})
 	defer r.Close()
 
-	r.SetOffset(4)
+	//r.SetOffset(4)
 	first := true
+	offset := int64(1)
 	for {
+		r.SetOffset(offset)
+		offset++
 		//log.Printf("Starting message reading loop")
 		m, err := r.ReadMessage(context.Background())
 		if err != nil {
 			log.Fatal(err)
 		}
 		if first {
-			r.SetOffset(2)
+			//r.SetOffset(2)
 			first = false
 		}
 		log.Printf("Message: %v", string(m.Value))
+		log.Printf("Offset: %v", m.Offset)
 		for _, h := range m.Headers {
 			log.Printf("%v - %v", h.Key, string(h.Value))
 		}
@@ -177,6 +203,22 @@ func Reader(topic string, partition int) {
 
 		conn.Close()
 	*/
+}
+
+func ConnReader(topic string, partition int) {
+	conn, err := k.DialLeader(context.Background(), "tcp", "kafka:9092", topic, partition)
+	if err != nil {
+		log.Printf("Failed to connect to kafka cluster: %v", err)
+		os.Exit(1)
+	}
+	b := make([]byte, 100)
+
+	start := time.Now()
+	deadline := start.Add(250 * time.Millisecond)
+
+	conn.SetReadDeadline(deadline)
+	_, err = conn.Read(b)
+	log.Printf("Error: %v", err)
 }
 
 func Writer(topic string, partition int) {
