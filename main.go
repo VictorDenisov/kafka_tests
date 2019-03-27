@@ -167,7 +167,7 @@ func Reader(topic string, partition int) {
 
 	//r.SetOffset(4)
 	first := true
-	offset := int64(1)
+	offset := int64(0)
 	for {
 		r.SetOffset(offset)
 		offset++
