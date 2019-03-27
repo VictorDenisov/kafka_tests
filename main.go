@@ -11,6 +11,7 @@ import (
 	"github.com/segmentio/kafka-go/snappy"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -25,6 +26,7 @@ func main() {
 	unpart := flag.Bool("unpart", false, "Unpartitioned reader")
 	v2test := flag.Bool("v2test", false, "v2 test")
 	versions := flag.Bool("versions", false, "versions")
+	brokers := flag.String("brokers", "localhost:32780,localhost:32781,localhost:32782", "Brokers")
 	topic := flag.String("topic", "test_topic", "Topic")
 	flag.Parse()
 
@@ -34,13 +36,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	brokerList := strings.Split(*brokers, ",")
+
 	switch {
 	case *writer:
 		fmt.Printf("This is writer. Partition %v\n", *partition)
 		Writer(*topic, *partition)
 	case *reader:
 		fmt.Printf("This is reader. Partition %v\n", *partition)
-		Reader(*topic, *partition)
+		Reader(*topic, *partition, brokerList)
 	case *connReader:
 		fmt.Printf("This is connReader. Partition %v\n", *partition)
 		ConnReader(*topic, *partition)
@@ -90,7 +94,8 @@ func V2Test(topic string) {
 
 	produce := func(n int, codec k.CompressionCodec) {
 		w := k.NewWriter(k.WriterConfig{
-			Brokers:          []string{"kafka:9092"},
+			//Brokers:          []string{"kafka:9092"},
+			Brokers:          []string{"localhost:32782", "localhost:32784", "localhost:32780"},
 			Topic:            topic,
 			CompressionCodec: codec,
 		})
@@ -153,11 +158,13 @@ func b2i(x bool) int {
 	}
 }
 
-func Reader(topic string, partition int) {
+func Reader(topic string, partition int, brokers []string) {
 	r := k.NewReader(k.ReaderConfig{
-		Brokers:   []string{"localhost:9092"},
-		Topic:     topic,
-		Partition: 0,
+		//Brokers:   []string{"localhost:9092"},
+		Brokers: brokers,
+		Topic:   topic,
+		//Partition: 0,
+		GroupID: "test_group1",
 		//MaxWait:  10 * time.Millisecond,
 		MinBytes:       1,
 		MaxBytes:       1000,
