@@ -169,19 +169,27 @@ func Reader(topic string, partition int, brokers []string) {
 		MinBytes:       1,
 		MaxBytes:       1000,
 		IsolationLevel: k.ReadCommitted,
+		QueueCapacity:  1000,
 	})
 	defer r.Close()
 
 	//r.SetOffset(4)
 	first := true
-	offset := int64(0)
+	offset := int64(394)
 	for {
-		r.SetOffset(offset)
+		//r.SetOffset(offset)
 		offset++
 		//log.Printf("Starting message reading loop")
-		m, err := r.ReadMessage(context.Background())
-		if err != nil {
-			log.Fatal(err)
+		var m k.Message
+		var err error
+		for {
+			m, err = r.ReadMessage(context.Background())
+			if err != nil {
+				//log.Fatal(err)
+			} else {
+				time.Sleep(1000)
+				break
+			}
 		}
 		if first {
 			//r.SetOffset(2)
@@ -192,6 +200,17 @@ func Reader(topic string, partition int, brokers []string) {
 		for _, h := range m.Headers {
 			log.Printf("%v - %v", h.Key, string(h.Value))
 		}
+		/*
+			if m.Type == k.ControlMessage {
+				log.Printf("Control message:")
+				/*
+					if m.ControlData.Type == k.CommitMessage {
+						log.Printf("Commit message.")
+					} else {
+						log.Printf("Abort message.")
+					}
+			}
+		*/
 		log.Printf("================")
 	}
 	/*
