@@ -155,17 +155,19 @@ func b2i(x bool) int {
 func Reader(topic string, partition int, brokers []string) {
 	r := k.NewReader(k.ReaderConfig{
 		//Brokers:   []string{"localhost:9092"},
-		Brokers: brokers,
-		Topic:   topic,
-		//Partition: 0,
-		GroupID: "test_group1",
+		Brokers:   brokers,
+		Topic:     topic,
+		Partition: partition,
+		//GroupID: "test_group2",
 		//MaxWait:  10 * time.Millisecond,
 		MinBytes:       1,
 		MaxBytes:       1000,
-		IsolationLevel: k.ReadCommitted,
+		IsolationLevel: k.ReadUncommitted,
 		QueueCapacity:  1000,
 	})
 	defer r.Close()
+
+	//r.SetOffset(k.FirstOffset)
 
 	//r.SetOffset(4)
 	first := true
@@ -173,7 +175,7 @@ func Reader(topic string, partition int, brokers []string) {
 	for {
 		//r.SetOffset(offset)
 		offset++
-		//log.Printf("Starting message reading loop")
+		log.Printf("Starting message reading loop")
 		var m k.Message
 		var err error
 		for {
@@ -262,13 +264,14 @@ func Writer(topic string, partition int) {
 		fmt.Printf("Failed to set deadline %v", err)
 		os.Exit(1)
 	}
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < 10000; i++ {
 		u, err := uuid.NewRandom()
 		if err != nil {
 			log.Printf("Failed to generate new uuid: %v", err)
 		} else {
+			value := fmt.Sprintf("value - %v", i)
 			conn.WriteMessages(
-				k.Message{Key: []byte(u.String()), Value: []byte("onealsdfjkajsdflaksjdflaksdfjlkasdjflasdkjflaksdfjsd!")},
+				k.Message{Key: []byte(u.String()), Value: []byte(value)},
 			)
 		}
 
